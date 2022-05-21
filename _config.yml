@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Config
 # ========================================================================================
 
@@ -422,6 +421,3 @@ jekyll_compose:
       links:
         - title: Project Link
           url: https://example.com
-=======
-theme: jekyll-theme-slate
->>>>>>> parent of a21fb62 (install jekyll)
