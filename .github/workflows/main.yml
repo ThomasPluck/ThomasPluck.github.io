@@ -11,7 +11,7 @@ jobs:
       with:
         ref: main
     - name: Run with dest path
-      uses: helaili/jekyll-build@v2
+      uses: helaili/jekyll-action@master
       with:
         target_branch: gh-pages
         target_path: /
