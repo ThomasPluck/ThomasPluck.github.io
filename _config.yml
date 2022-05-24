@@ -2,7 +2,7 @@ title: Abacus Squid 🧮🦑
 author:
   name: Thomas Pluck
 description: > # this means to ignore newlines until "show_excerpts:"
-  Abacus Squid 🧮🦑 | The Personal Blog of Thomas Pluck
+  🧮🦑 | The Personal Blog of Thomas Pluck
 
 show_excerpts: false # set to true to show excerpts on the homepage
 
@@ -59,7 +59,6 @@ plugins:
  - jekyll/scholar
 
 # Jekyll scholar config
-
 scholar:
   style: nature
   locale: en
