@@ -1,7 +1,9 @@
-name: GH Pages Deploy
+name: GH Pages CI
 
 on:
-  push
+  push:
+    branches:
+      - main
 
 jobs:
   build-deploy:
@@ -18,8 +20,8 @@ jobs:
           key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-gems-
+            
       - name: Build and deploy
         uses: helaili/jekyll-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          target_branch: "gh-pages"
