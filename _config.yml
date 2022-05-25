@@ -26,7 +26,7 @@ social_username: thomas-pluck
 
 # Set theme color here
 # Choose from: black (default), blue, gray, magenta, orange, red, white, and yellow.
-theme_color: gray
+theme_color: black
 
 # Build settings
 markdown: kramdown
