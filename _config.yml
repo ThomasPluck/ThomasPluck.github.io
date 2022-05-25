@@ -16,7 +16,7 @@
 title: 🧮🐙 Abacus Octopus
 description: The Personal Blog of Thomas Pluck
 baseurl: "" # the subpath of your site, e.g. /blog
-url: "https://abacus-squid.gq" # the base hostname & protocol for your site, e.g. http://example.com
+url: "https://abacus-octopus.ml" # the base hostname & protocol for your site, e.g. http://example.com
 github_username: ThomasPluck
 
 # Optional social link, you can choose from the following options:
