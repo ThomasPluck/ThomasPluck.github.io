@@ -1,17 +1,18 @@
 // Default black theme
 
 // Color variables
+$gray: #424242;
 $black: #181818;
 $red: #E74727;
 $red-small: #DC3918;
 $white: #fff;
 
 // Config
-$color-background: $black !default;
+$color-background: $gray !default;
 $color-dot-accent: $red !default;
-$color-foreground: $white !default;
+$color-foreground: $black !default;
 $color-title: $white !default;
-$color-body-text: $black !default;
+$color-body-text: $white !default;
 $color-text-accent: $red !default;
 $color-code: $red-small !default;
 $color-nav-link: $red !default;
