@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 source "https://rubygems.org"
 gemspec
 
@@ -8,6 +6,8 @@ gem "kramdown-parser-gfm" if ENV["JEKYLL_VERSION"] == "~> 3.9"
 
 group :jekyll_plugins do
     gem 'jekyll-scholar'
+    gem 'jekyll-feed'
+    gem 'jekyll-seo-tag'
 end
 
 gem "webrick"
