@@ -64,6 +64,17 @@
 .col-11 { width: (11 / 12 * 100%); }
 .col-12 { width: 100%; }
 
+/* Image Layout */
+.header-image {
+
+  @media (min-width: $breakpoint-lg) {
+    width: $head-img-desktop;
+  }
+  @media (max-width: $breakpoint-lg) {
+    width: $head-img-mobile
+  }
+}
+
 @media (max-width: $breakpoint-lg) {
   .sm-width-full { width: 100% !important; }
 }
@@ -157,6 +168,12 @@
   .mr-lg-4 { margin-right: $spacer-4; }
   .mb-lg-4 { margin-bottom: $spacer-4; }
   .ml-lg-4 { margin-left: $spacer-4; }
+
+  .header-kern { margin-right: $spacer-3; }
+}
+
+@media (max-width: 52em) {
+  .header-kern { margin-right: $spacer-1; }
 }
 
 // Link styles for social icons
