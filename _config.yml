@@ -14,7 +14,7 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 title: Abacus Squid
-description: The Personal Blog of Thomas Pluck
+description: The Hitchhiker's Guide to Silicon 
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://abacus-squid.gq" # the base hostname & protocol for your site, e.g. http://example.com
 github_username: ThomasPluck
@@ -25,6 +25,10 @@ theme_color: yellow
 
 # Build settings
 markdown: kramdown
+
+kramdown:
+  syntax_highlighter: rouge
+  input: GFM
 
 plugins:
  - jekyll-feed
