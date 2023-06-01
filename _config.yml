@@ -39,7 +39,7 @@ plugins:
 
 # Jekyll scholar config
 scholar:
-  style: nature
+  style: ieee
   locale: en
   source: ./_bib
   bibliography: references.bib

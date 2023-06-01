@@ -107,7 +107,7 @@ time {
 
   // Markdown tables
   table {
-    border-collapse: collapse;
+    // border-collapse: collapse;
     display: block;
     width: 100%;
     margin-bottom: 1.5em;
@@ -118,7 +118,7 @@ time {
 
     th {
       font-weight: bold;
-      text-align: left;
+      text-align: center;
     }
 
     th,
@@ -131,6 +131,7 @@ time {
     tr {
       background-color: #fff;
       border-top: 1px solid $color-body-text;
+      text-align: center;
     }
 
     tr th {
