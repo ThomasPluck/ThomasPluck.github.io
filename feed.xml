@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.2">Jekyll</generator><link href="https://abacus-squid.gq/feed.xml" rel="self" type="application/atom+xml" /><link href="https://abacus-squid.gq/" rel="alternate" type="text/html" /><updated>2023-06-03T06:44:48+00:00</updated><id>https://abacus-squid.gq/feed.xml</id><title type="html">Abacus Squid</title><subtitle>The Hitchhiker's Guide to Silicon</subtitle><entry><title type="html">SKY130 + HDL21 Integration</title><link href="https://abacus-squid.gq/hdl21/2023/06/01/sky130-hdl21.html" rel="alternate" type="text/html" title="SKY130 + HDL21 Integration" /><published>2023-06-01T00:00:00+00:00</published><updated>2023-06-01T00:00:00+00:00</updated><id>https://abacus-squid.gq/hdl21/2023/06/01/sky130-hdl21</id><content type="html" xml:base="https://abacus-squid.gq/hdl21/2023/06/01/sky130-hdl21.html"><![CDATA[<p>With a recent pull request last week it is now possible to use <a href="https://skywater-pdk.readthedocs.io/en/main/rules/device-details.html">every device in the SKY130 Open PDK</a> in the <a href="https://github.com/dan-fritchman/Hdl21">HDL21 Python library</a>. In this post, I’ll break down what is HDL21 and explain how you can now use it to simulate integrated chip designs in the SKY130 Open PDK in pure Python.</p>
+
+<h3 id="hdl21-an-introduction">HDL21: An Introduction</h3>
+
+<p><a href="https://github.com/dan-fritchman/Hdl21">HDL21</a> is a Python library that enables users to create, simulate, and verify analog and digital integrated circuit (IC) designs using high-level Python code. HDL stands for Hardware Description Language, and the ‘21’ stands for the modern, 21st-century approach to hardware design. This library simplifies the complex IC design process and allows for rapid prototyping and testing, making it an invaluable tool for designers.</p>
+
+<p>The <a href="https://github.com/google/skywater-pdk">SKY130 Open PDK</a> is an open-source Process Design Kit (PDK) developed by SkyWater Technology in collaboration with Google and the open-source community. It provides the necessary information and libraries to create IC designs using the SKY130 130-nanometer (nm) technology node. With this collaboration, the HDL21 Python library now supports every device in the SKY130 Open PDK, making it an even more powerful and accessible tool for IC design.</p>
+
+<h3 id="installation">Installation</h3>
+
+<p>First, make sure you have Python 3.6 or later installed on your system which should be Unix-based<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. You can then install HDL21 and the SKY130-HDL21 PDK module using pip:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+pip <span class="nb">install </span>hdl21 sky130-hdl21
+
+</code></pre></div></div>
+
+<p>For HDL21 to work with the SKY130 Open PDK, we need to install both a simulator and the PDK itself. HDL21 is compatible with both <a href="https://ngspice.sourceforge.io/">ngspice</a> and <a href="https://xyce.sandia.gov/">Xyce</a> simulators. We recommend using the latest the stable release of ngspice for HDL21 - the Ubuntu package is unfortunately out of date.</p>
+
+<p>Installing the SKY130 PDK is made easy by <a href="https://github.com/RTimothyEdwards/open_pdks">Tim Edward’s Open-PDKs installer</a>, by running the following commands:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+git clone https://github.com/RTimothyEdwards/open_pdks.git
+<span class="nb">cd </span>open_pdks
+./configure <span class="nt">--enable-sky130-pdk</span>
+make
+<span class="o">[</span><span class="nb">sudo</span><span class="o">]</span> make <span class="nb">install</span>
+
+</code></pre></div></div>
+
+<h3 id="lets-build-a-circuit">Let’s build a Circuit!</h3>
+
+<p>Now that we have the pieces, lets make a circuit out of them. In this demo, we will build and simulate a simple CMOS inverter in the SKY130 Open technology node using HDL21.</p>
+
+<h4 id="step-1-import-hdl21--friends">Step 1: Import HDL21 + Friends</h4>
+
+<p>To begin, we need to import the HDL21 library and the SKY130-HDL21 PDK module and its components, as follows:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="kn">import</span> <span class="n">hdl21</span> <span class="k">as</span> <span class="n">h</span>
+<span class="kn">import</span> <span class="n">sky130</span>
+
+</code></pre></div></div>
+
+<p>SKY130 contains an object called <code class="language-plaintext highlighter-rouge">Install</code> which is used to track the PDK installation, we next have to instantiate this, you only have to pass these paths if you didn’t follow the Open-PDK installation guide above.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="n">sky130</span><span class="p">.</span><span class="n">install</span> <span class="o">=</span> <span class="n">sky130</span><span class="p">.</span><span class="nc">Install</span><span class="p">(</span>
+    <span class="n">pdk_path</span><span class="o">=</span><span class="sh">"</span><span class="s">absolute/path/to/your/pdk/install</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">model_ref</span><span class="o">=</span><span class="sh">"</span><span class="s">relative/path/from/pdk_path/to/libs.ref</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">lib_path</span><span class="o">=</span><span class="sh">"</span><span class="s">relative/path/from/pdk_path/to/libs.tech/ngspice/sky130.lib.spice</span><span class="sh">"</span>
+<span class="p">)</span>
+
+</code></pre></div></div>
+
+<h4 id="step-2-implement-a-cmos-inverter">Step 2: Implement a CMOS Inverter</h4>
+
+<p>Now we are ready to design the CMOS inverter that we are interested in, this can actually be done in two ways using native HDL21 primitives and compiling them to <code class="language-plaintext highlighter-rouge">sky130.modules</code> devices or by writing them directly as <code class="language-plaintext highlighter-rouge">sky130.modules</code> devices themselves. We’ll demonstrate the latter first:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Decorator makes a class into a HDL21 module
+</span><span class="nd">@h.module</span> 
+<span class="k">class</span> <span class="nc">Inv</span><span class="p">:</span>
+
+    <span class="c1"># Specify the model parameters, uses defaults
+</span>    <span class="n">p</span> <span class="o">=</span> <span class="n">sky130</span><span class="p">.</span><span class="nc">Sky130MosParams</span><span class="p">()</span>
+
+    <span class="c1"># Define our inverter's ports here
+</span>    <span class="n">i</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">VDD</span><span class="p">,</span> <span class="n">VSS</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">h</span><span class="p">.</span><span class="nc">Port</span><span class="p">()</span> 
+    
+    <span class="c1"># Here is our NMOS
+</span>    <span class="n">n</span> <span class="o">=</span> <span class="n">sky130</span><span class="p">.</span><span class="n">modules</span><span class="p">.</span><span class="nc">NMOS_1p8V_STD</span><span class="p">(</span><span class="n">p</span><span class="p">)(</span><span class="n">d</span><span class="o">=</span><span class="n">o</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">VSS</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">VSS</span><span class="p">)</span>
+
+    <span class="c1"># Here is our PMOS
+</span>    <span class="n">p</span> <span class="o">=</span> <span class="n">sky130</span><span class="p">.</span><span class="n">modules</span><span class="p">.</span><span class="nc">PMOS_1p8V_STD</span><span class="p">(</span><span class="n">p</span><span class="p">)(</span><span class="n">d</span><span class="o">=</span><span class="n">o</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">VDD</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">VDD</span><span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>Remembering and looking up the long names describing individual devices can be a pain, even if we simplified them in the PDK module itself. To use HDL21 primitives directly<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>, we can instead take a different approach:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Decorator makes a class into a HDL21 module
+</span><span class="nd">@h.module</span> 
+<span class="k">class</span> <span class="nc">Inv</span><span class="p">:</span>
+    <span class="c1"># Nothing changes here
+</span>    <span class="n">i</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">VDD</span><span class="p">,</span> <span class="n">VSS</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">h</span><span class="p">.</span><span class="nc">Port</span><span class="p">()</span>
+
+    <span class="c1"># Same as the above components!
+</span>    <span class="n">n</span> <span class="o">=</span> <span class="n">h</span><span class="p">.</span><span class="nc">Nmos</span><span class="p">()(</span><span class="n">d</span><span class="o">=</span><span class="n">o</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">VSS</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">VSS</span><span class="p">)</span> 
+    <span class="n">p</span> <span class="o">=</span> <span class="n">h</span><span class="p">.</span><span class="nc">Pmos</span><span class="p">()(</span><span class="n">d</span><span class="o">=</span><span class="n">o</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">VSS</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">VSS</span><span class="p">)</span> 
+
+<span class="c1"># Automagically convert HDL21 prims into sky130 modules
+</span><span class="n">sky130</span><span class="p">.</span><span class="nf">compile</span><span class="p">(</span><span class="n">Inv</span><span class="p">)</span> 
+
+</code></pre></div></div>
+
+<p>Both of these HDL21 modules describe a CMOS inverter with a pair of 1.8V PMOS and NMOS MOSFETs with a standard voltage threshold in the SKY130 PDK. The NMOS and PMOS are connected using a declarative-style, that is familiar to users of other popular HDLs. This maps the device terminals to each other and module ports in such a way that the CMOS pair are now configured as a CMOS inverter.</p>
+
+<h4 id="step-3-create-a-simulation-testbench">Step 3: Create a Simulation Testbench</h4>
+
+<p>With our CMOS inverter now defined, we can use HDL21’s simulation functionality to take our device and pass it to a simulator that you have installed earlier. For our simulator to work well, we will also require HDL21’s simulator integration backend <code class="language-plaintext highlighter-rouge">vlsirtools</code> - this is installed with HDL21 and so we can import it now:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="kn">import</span> <span class="n">vlsirtools.spice</span> <span class="k">as</span> <span class="n">vsp</span>
+
+</code></pre></div></div>
+
+<p>We can now define a simulation testbench using the following code:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">@h.sim.sim</span>
+<span class="k">class</span> <span class="nc">Sim</span><span class="p">:</span>
+    <span class="sh">"""</span><span class="s">Inverter DC OP Simulation</span><span class="sh">"""</span>
+
+    <span class="nd">@h.module</span>
+    <span class="k">class</span> <span class="nc">Tb</span><span class="p">:</span>  <span class="c1"># Testbench
+</span>        <span class="n">VSS</span> <span class="o">=</span> <span class="n">h</span><span class="p">.</span><span class="nc">Port</span><span class="p">()</span>
+        <span class="n">s</span><span class="p">,</span> <span class="n">VDD</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">h</span><span class="p">.</span><span class="nc">Signal</span><span class="p">()</span>
+        <span class="n">vvdd</span> <span class="o">=</span> <span class="n">h</span><span class="p">.</span><span class="nc">Vdc</span><span class="p">(</span><span class="n">dc</span><span class="o">=</span><span class="mi">1</span><span class="p">)(</span><span class="n">p</span><span class="o">=</span><span class="n">VDD</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="n">VSS</span><span class="p">)</span>
+        <span class="n">inv</span> <span class="o">=</span> <span class="nc">Inv</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="n">s</span><span class="p">,</span> <span class="n">o</span><span class="o">=</span><span class="n">s</span><span class="p">,</span> <span class="n">VDD</span><span class="o">=</span><span class="n">VDD</span><span class="p">,</span> <span class="n">VSS</span><span class="o">=</span><span class="n">VSS</span><span class="p">)</span>
+
+    <span class="c1"># Simulation Controls
+</span>    <span class="n">op</span> <span class="o">=</span> <span class="n">h</span><span class="p">.</span><span class="n">sim</span><span class="p">.</span><span class="nc">Op</span><span class="p">()</span>
+    <span class="n">inc</span> <span class="o">=</span> <span class="n">sky130</span><span class="p">.</span><span class="n">install</span><span class="p">.</span><span class="nf">include</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">pdk</span><span class="p">.</span><span class="n">Corner</span><span class="p">.</span><span class="n">TYP</span><span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>In the code, a testbench class Tb is created within the Sim class, which includes the VSS port<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>, two signals (<code class="language-plaintext highlighter-rouge">s</code> and <code class="language-plaintext highlighter-rouge">VDD</code>), a DC voltage source <code class="language-plaintext highlighter-rouge">vvdd</code>, and an instance of the <code class="language-plaintext highlighter-rouge">Inv</code> inverter module. The simulation control settings are defined using <code class="language-plaintext highlighter-rouge">h.sim.Op()</code> for the DC OP simulation, and the typical corner parameters from the SKY130 Open PDK are included using <code class="language-plaintext highlighter-rouge">sky130.install.include(h.pdk.Corner.TYP)</code><sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>. This setup allows you to run a DC operating point simulation of the inverter circuit and analyze its performance.</p>
+
+<h4 id="step-4-simulate">Step 4: Simulate!</h4>
+
+<p>Finally, we perform a DC Operating Point simulation on a CMOS inverter all from the comfort of Python.</p>
+
+<p>We define the simulator options here, which specify the kind of simulator we would like, where we would like to store the simulator output and how we would like the simulator results parsed.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="n">opts</span> <span class="o">=</span> <span class="n">vsp</span><span class="p">.</span><span class="nc">SimOptions</span><span class="p">(</span>
+
+    <span class="c1"># Set the desired simulator
+</span>    <span class="n">simulator</span><span class="o">=</span><span class="n">vsp</span><span class="p">.</span><span class="n">SupportedSimulators</span><span class="p">.</span><span class="n">NGSPICE</span><span class="p">,</span>
+
+    <span class="c1"># Get Python-native result types
+</span>    <span class="n">fmt</span><span class="o">=</span><span class="n">vsp</span><span class="p">.</span><span class="n">ResultFormat</span><span class="p">.</span><span class="n">SIM_DATA</span><span class="p">,</span> 
+
+    <span class="c1"># Set the working directory for the simulation.
+</span>    <span class="n">rundir</span><span class="o">=</span><span class="sh">"</span><span class="s">./sim_directory</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>And we now run our simulation and see the results:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Run the simulation!
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">Sim</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="n">opts</span><span class="p">)</span>
+
+<span class="c1"># Get the operating point data
+</span><span class="n">op</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="n">vsp</span><span class="p">.</span><span class="n">sim_data</span><span class="p">.</span><span class="n">AnalysisType</span><span class="p">.</span><span class="n">OP</span><span class="p">]</span>
+
+<span class="c1"># Get the voltage across the simulator
+</span><span class="n">vs</span> <span class="o">=</span> <span class="n">op</span><span class="p">.</span><span class="n">data</span><span class="p">[</span><span class="sh">"</span><span class="s">v(xtop.s)</span><span class="sh">"</span><span class="p">]</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>And that’s a DC Operating Point analysis on a CMOS inverter entirely with python.</p>
+
+<h3 id="the-future-of-hdl21-pdk-integration">The Future of HDL21 PDK Integration</h3>
+
+<p>While the integration of the SKY130 Open PDK device primitives has marked a significant step forward for HDL21, our aim is to support an even broader range of devices within the SKY130 PDK and other PDKs including both the <a href="https://github.com/google/gf180mcu-pdk">Global Foundries 180nm MCU Open PDK</a> and the recently announced <a href="https://github.com/IHP-GmbH/IHP-Open-PDK">IHP 130nm BiCMOS Open PDK</a>. By constantly expanding the list of compatible devices, we will ensure that HDL21 is a great tool for those looking to interact with Open PDKs.</p>
+
+<h3 id="notes">Notes</h3>
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>For Windows users, this installation can be problematic and we recommend that you use our <a href="devcontainer">development container</a> which comes with these pre-installed on minimal Ubuntu set-up that you can interact with via terminal. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>By default HDL21 primitives are compiled into the standard core components of the SKY130 PDK, they can be chosen more specifically by using arguments inside of the HDL primitives to select classes of PDK components or by directly specifying the model - which is taken to be the same as the module name given in <code class="language-plaintext highlighter-rouge">sky130.modules</code>. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p><code class="language-plaintext highlighter-rouge">VSS</code> represents ground in your circuit and must be defined in your testbench for your simulation to work. It is a standard parameter that will make your simulation fail if it is not present as a singular port. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>Inclusion options using the SKY130 PDK are designed to reflect the SPICE internals of the PDK and can be tricky to get right and are often slow. For this purpose we created a function <code class="language-plaintext highlighter-rouge">sky130.auto_includes(Sim)</code> which automatically adds the required include statements for the most efficient simulation possible. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="hdl21" /><summary type="html"><![CDATA[The SKY130nm PDK has arrived in HDL21!]]></summary></entry></feed>
