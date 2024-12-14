@@ -1,0 +1,20 @@
+/* Container for blog content */
+.blog-container {
+    /* Center the content */
+    margin: 0 auto;
+    padding: 0 20px;
+    
+    /* Default width for mobile */
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Media query for laptops and larger screens (generally >768px) */
+@media screen and (min-width: 768px) {
+    .blog-container {
+        /* 80% width on larger screens */
+        width: 80%;
+        /* Optional: maximum width to prevent super-wide text on large screens */
+        max-width: 1200px;
+    }
+}
