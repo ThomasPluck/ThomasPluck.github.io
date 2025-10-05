@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Blog of Thomas Pluck</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <div class="blog-container">
+    <header>
+        <h1>Estimating Exact Gradients with Equilibrium Propagation</h1>
+    </header>
+    <hr>
+    <a href="index.html">Home</a>
+
+    <p>The main body of this work is a generalization of the proof found in <a href="https://arxiv.org/abs/2209.00530">Axel Laborieux's Holomorphic Equilibrium Propagation</a> to the classic Equilibrium Propagation algorithm to derive an exact gradient estimator/nudging protocol.</p>
+
+    <h3>On Complex Analysis</h3>
+    <p>
+    A first course in complex analysis is typically taught as applications of holomorphic function theory. To the uninitiated, holomorphic functions are simply functions where naively "taking the derivative" makes sense in complex numbers:
+    \[\dfrac{df}{dz}\bigg|_{z=z_0}=\lim_{\varepsilon\to 0}\dfrac{f(z_0+\varepsilon)-f(z_0)}{\varepsilon}\]
+    Counter-intuitively, this quantity isn't actually well-defined for arbitrary complex functions who have partial derivatives in the real and imaginary components. Instead this requires a special category of differentiability just for complex numbers called <i>holomorphy</i>. A function \(f(x+iy)=u(x,y)+iv(x,y)\) where \(f:\mathbb{C}\to\mathbb{C}\) and \(u:\mathbb{R}\to\mathbb{R}\) and \(v:\mathbb{R}\to\mathbb{R}\) is <i>holomorphic</i> when \(u\) and \(v\) satisfy the Cauchy-Riemann equations:
+    \[\dfrac{\partial u}{\partial x}=\dfrac{\partial v}{\partial y}\]
+    \[\dfrac{\partial v}{\partial x}=-\dfrac{\partial u}{\partial y}\]
+    It's important to note that you think of \(\mathbb{C}\to\mathbb{C}\) functions as \(\mathbb{R}^2\to\mathbb{R}^2\) generally, but that holomorphy symmetry properties come into play whenever the Cauchy-Riemann equations are satisfied.
+    </p>
+    <p>Holomorphic function theory own possesses an unusual amount of structure which allows for the application of powerful theorems when holomorphy can be identified in a system, such as the Cauchy differentiation formula below:
+    \[\dfrac{d^nf}{dz^n}\bigg|_{z=z_0}=\dfrac{n!}{2\pi i}\oint_\gamma \dfrac{f(z)}{(z-z_0)^{n+1}}dz\]
+    Which is true when \(\gamma\) is the boundary of an <i>arbitrary</i> simply-connected, compact domain containing \(z_0\) where \(f\) is holomorphic.</p>
+    <p>Holomorphy as we stated earlier, however, is a property which can be exhibited by arbitrary \(f:\mathbb{R}^2\to\mathbb{R}^2\) systems - what do these fantastic formulas look like in their \(\mathbb{R}^2\) form? Well, we can compute the equivalent form manually of the Cauchy integral formula (differential formula for the zeroth derivative) using the identity:</p>
+    \[u(x_0,y_0)+iv(x_0,y_0)=\dfrac{1}{2\pi i}\oint_\gamma\dfrac{u(x,y)+i v(x,y)}{(x-x_0)+i(y-y_0)} dx+idy\]
+    <p>And in a few lines left as an exercise to the reader, we can get the formulae contracting \(\tilde x=x-x_0, \tilde y = y - y_0\) and \(r^2=\tilde x^2 + \tilde y ^2\):</p>
+    \[u(x_0,y_0) = \dfrac{1}{2\pi} \oint_{\gamma} \dfrac{\tilde x u(x,y) + \tilde y v(x,y)}{r^2} dx + \dfrac{\tilde x v(x,y)- \tilde y u(x,y)}{r^2} dy\]
+    \[v(x_0,y_0) = \dfrac{1}{2\pi} \oint_{\gamma} \dfrac{\tilde x v(x,y) - \tilde y u(x,y)}{r^2} dx - \dfrac{\tilde x u(x,y) + \tilde y v(x,y)}{r^2} dy\]
+    <p>Remember that \(\gamma\) is a parametric curve associating pairs of \(x\) and \(y\) so the definitions of the integrals above remain well-defined. For the purposes of our derivation, we will also need the Cauchy integral formula for the first derivative - by the Cauchy Riemann equations we can write:</p>
+    \[\dfrac{df}{dz}=\dfrac{\partial u}{\partial x} + i \dfrac{\partial v}{\partial x}=\dfrac{\partial u}{\partial y} + i \dfrac{\partial v}{\partial y}\]
+    <p>Let \(A=\tilde x^2-\tilde y^2\) and \(B=-2\tilde x \tilde y\) then we may establish by the Cauchy theorem that:</p>
+    \[\dfrac{\partial u}{\partial x} = \dfrac{\partial v}{\partial y} = \dfrac{1}{2\pi}\oint_\gamma \dfrac{Bu(x,y)+Av(x,y)}{r^4} dx + \dfrac{Au(x,y)-Bv(x,y)}{r^4} dy\]
+    \[\dfrac{\partial v}{\partial x} = \dfrac{-\partial v}{\partial y} = \dfrac{1}{2\pi}\oint_\gamma \dfrac{Bu(x,y)-Av(x,y)}{r^4} dx + \dfrac{Av(x,y)+Bu(x,y)}{r^4} dy\]
+    <h3>Equilibrium Propagation</h3>
+    <p>At this stage we now have all the ingredients to repeat the holomorphic equilibrium propagation trick for classic equilibrium propagation, the first step is that we must sneak a virtual complex number into the definition of equilibrium propagation. Let's for the sake of argument, define two energies in terms of "un-nudged energy" \(E\) and loss function \(\mathcal{L}\) for our equilibriating dynamics defined by real nudging factors \(x,y\in\mathbb{R}\):</p>
+    \[F_1=E+x\mathcal{L} \qquad F_2=E+y\mathcal{L}\]
+    <p>We've cheated, there's only really one equilibriating dynamic \(F\) but, taken as a pure computational object, we can show that these two virtual energies satisfy the Cauchy-Riemman equations assuming \(E\) and \(\mathcal{L}\) are not functions of \(x\) and \(y\) themselves:</p>
+    \[\dfrac{\partial F_1}{\partial x}=\dfrac{\partial F_2}{\partial y} = \mathcal{L}\]
+    \[\dfrac{\partial F_1}{\partial y}=-\dfrac{\partial F_2}{\partial x} = 0\]
+    <p>We can also show that the parameter \(\Theta\) derivatives of \(F\), similarly satisfy this Cauchy-Riemann equation - and so we have by the implicit function theorem (assuming \(F\) satisfies the typical equilibrium propagation conditions) that the classic equilibrium propagation limit holds:</p>
+    \[\dfrac{\partial \mathcal{L}}{\partial \Theta} = \lim_{x_0\to 0} \dfrac{1}{x_0}\left(\dfrac{\partial F_1}{\partial \Theta}\bigg|_{x=x_0} - \dfrac{\partial F_1}{\partial \Theta}\bigg|_{x=0}\right)=\dfrac{\partial F_1}{\partial x\partial \Theta}\bigg|_{x=0}=\dfrac{\partial F_2}{\partial y\partial \Theta}\bigg|_{y=0}\] 
+    <p>And so we may now apply the Cauchy first derivative formula that we calucalated above in terms of our virtual potentials, so long as \(\gamma\) is any closed path that encloses a domain with \((0,0)\) in it:</p>
+    \[\dfrac{\partial \mathcal{L}}{\partial \Theta} = \dfrac{1}{2\pi} \oint_\gamma \dfrac{1}{r^4}\left(B\dfrac{\partial F_1}{\partial \Theta}+A\dfrac{\partial F_2}{\partial \Theta}\right) dx +\dfrac{1}{r^4}\left(A\dfrac{\partial F_1}{\partial \Theta}-B\dfrac{\partial F_2}{\partial \Theta}\right) dy\]
+    Thus it is possible to derive a 2K point (since we have two virtual potentials) estimator with a circular path around the origin in the \(x,y\)-plane given by \(t_k=2\pi k/K\) and points \((x_k,y_k)=(R\cos(t_k),R\sin(t_k))\) and \(A_k=x_k^2-y_k^2\) and \(B=-2x_ky_k\):
+    \[\dfrac{\partial \mathcal{L}}{\partial \Theta} \approx \dfrac{1}{2\pi K R^3} \sum_{k=1}^K \cos(t_k)\left(A_k\dfrac{\partial F_1}{\partial \Theta}\bigg|_k-B_k\dfrac{\partial F_2}{\partial \Theta}\bigg|_k\right) - \sin(t_k)\left(B_k\dfrac{\partial F_1}{\partial \Theta}\bigg|_k+A_k\dfrac{\partial F_2}{\partial \Theta}\bigg|_k\right)+O\left(R^{-K}\right)\]
+    Note that in the special case where \(K\equiv 0 \mod 4\) that the 4 complex numbers can be described with 4 real coordinates, so this formula reduces to a \(K\) point estimator.
+    <footer>
+        <p>© 2025 Thomas Pluck</p>
+    </footer>
+    </div>
+</body>
+</html>
