@@ -51,7 +51,10 @@
     \[\dfrac{\partial \mathcal{L}}{\partial \Theta} = \dfrac{1}{2\pi} \oint_\gamma \dfrac{1}{r^4}\left(B\dfrac{\partial F_1}{\partial \Theta}+A\dfrac{\partial F_2}{\partial \Theta}\right) dx +\dfrac{1}{r^4}\left(A\dfrac{\partial F_1}{\partial \Theta}-B\dfrac{\partial F_2}{\partial \Theta}\right) dy\]
     Thus it is possible to derive a 2K point (since we have two virtual potentials) estimator with a circular path around the origin in the \(x,y\)-plane given by \(t_k=2\pi k/K\) and points \((x_k,y_k)=(R\cos(t_k),R\sin(t_k))\) and \(A_k=x_k^2-y_k^2\) and \(B=-2x_ky_k\):
     \[\dfrac{\partial \mathcal{L}}{\partial \Theta} \approx \dfrac{1}{2\pi K R^3} \sum_{k=1}^K \cos(t_k)\left(A_k\dfrac{\partial F_1}{\partial \Theta}\bigg|_k-B_k\dfrac{\partial F_2}{\partial \Theta}\bigg|_k\right) - \sin(t_k)\left(B_k\dfrac{\partial F_1}{\partial \Theta}\bigg|_k+A_k\dfrac{\partial F_2}{\partial \Theta}\bigg|_k\right)+O\left(R^{-K}\right)\]
-    Note that in the special case where \(K\equiv 0 \mod 4\) that the 4 complex numbers can be described with 4 real coordinates, so this formula reduces to a \(K\) point estimator.
+    <p>The accuracy of this estimator is derived from the same argument used in Laborieux's work regarding contour integrals of holomorphic functions. Note that in the special case where \(K\equiv 0 \mod 4\) that the 4 complex numbers can be described with 4 real coordinates, so this formula reduces to a \(K\) point estimator.</p>
+
+    <p>As a corollary, these dynamics can also be applied to the general non-holomorphic complex valued dynamics which dramatically simplifies implementation and makes this result particularly relevant to those designing oscillator-based neural networks.</p>
+
     <footer>
         <p>© 2025 Thomas Pluck</p>
     </footer>
