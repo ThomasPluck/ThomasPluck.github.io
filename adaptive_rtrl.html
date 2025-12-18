@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Blog of Thomas Pluck</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <div class="blog-container">
+    <header>
+        <h1>Adaptive IIR Neurons with Closed-Form RTRL</h1>
+        <nav class="menu-bar">
+            <a href="./index.html">Blog</a>
+            <a href="./about.html">About</a>
+        </nav>
+    </header>
+
+    <p>The gap between how artificial and biological neural networks learn temporal dependencies remains vast. Backpropagation through time requires storing entire trajectories and propagating gradients backward - a procedure with no obvious biological analogue. Real-Time Recurrent Learning offers an alternative: maintain <i>eligibility traces</i> that accumulate sensitivity information forward in time, enabling local, online updates. The catch? For general RNNs, these traces explode to \(O(N^4)\) storage. But here's the interesting bit: if you choose your recurrent dynamics carefully, the eligibility traces inherit the same structure as the dynamics themselves... collapsing the bookkeeping to something tractable. Even better, this elegance survives when you make the dynamics <i>adaptive</i>, opening the door to input-dependent gating without sacrificing the simplicity of the learning rule.</p>
+
+    <h3>Real-Time Recurrent Learning</h3>
+
+    <p>Real-Time Recurrent Learning (RTRL) is the basis of better-known neuromorphic algorithm Eligibility Propagation (EliProp) and was originally proposed in the 70s - like many gems from the time it was declared dead on arrival as when applied naïve RNNs it required \(O(N^4)\) eligibility/sensitivity tensors which kept track of how the hidden weights impacted everything. It was eventually realised in the last 10 years of so that you can cut that down to \(O(N^2)\) space for "diagonal RNNs" (where recurrence is purely intra-neuron) and there is typically outer product factorization which makes \(O(N)\) possible - but you have to pay in time or parallelism (the latter is less of a problem for hardware people).</p>
+
+    <p>In short, each model parameter has an eligibility in relation to every model state that it interacts with, ie.\[\dfrac{\partial \mathcal{L}^{(t+1)}}{\partial \theta} = \sum_i \dfrac{\partial \mathcal{L}}{\partial s_i^{(t+1)}}\dfrac{\partial s_i^{(t+1)}}{\partial \theta}\] We call the \(e_{s_i}^\theta=\partial s_i^{(t)}/\partial\theta\) the sensitivity/eligibility of \(\theta\) with respect to \(s_i\) at time \(t\) - this quantity is typically computed as a moving average of the immediate Jacobian at time \(t+1\), \(I_{s_i}^\theta=\partial s_i/\partial \theta\) given by the relation \[\dfrac{\partial s_i^{(t+1)}}{\partial \theta} = I_{s_i}^\theta + \dfrac{\partial s_i^{(t+1)}}{\partial s_i^{(t)}}\dfrac{\partial s_i^{(t)}}{\partial \theta}\]</p>
+
+    <p>This equation becomes very nice if you can show that there is a simple closed form for \(\partial s_i^{(t+1)}/\partial s_i^{(t)}\). For example, here's the model I use: a second-order IIR filter on the preactivations - for stability, simply watch your poles: \[z[t+1] = W x[t] + b \]\[y[t+1] = z[t+1] + b_0z[t] + b_1z[t-1] - a_0y[t] - a_1y[t-1]\]</p>
+
+    <p>Eligibility in this case now exhibits a closed form for all parameters including \(a_0, a_1, b_0\) and \(b_1\) themselves: \[e_y^θ[t+1] = I_y^\theta[t+1] + b_0I_z^\theta[t] + b_1I_z^\theta[t-1] - a_0e_y^\theta[t] - a_1e_y^\theta[t-1]\]</p>
+
+    <h3>Making It Adaptive</h3>
+
+    <p>The fixed-coefficient IIR filter is expressive, but biological neurons don't operate with static dynamics - their responses adapt to context. Gated architectures like LSTMs achieve this through learned, input-dependent gates. Can we do the same while preserving our clean eligibility trace structure?</p>
+
+    <p>The answer is yes. Replace each scalar coefficient with a simple nonlinear function of the input: \[a_0[t+1] = \tanh(w_{a_0} \cdot x[t] + c_{a_0})\] and similarly for \(a_1, b_0, b_1\). Each coefficient is now computed by its own single-neuron network - a learned linear projection followed by a tanh squash. The filter dynamics become: \[y[t+1] = z[t+1] + b_0[t+1] \cdot z[t] + b_1[t+1] \cdot z[t-1] - a_0[t+1] \cdot y[t] - a_1[t+1] \cdot y[t-1]\]</p>
+
+    <p>This is essentially an input-dependent gating mechanism, reminiscent of Liquid Time-Constant networks or the forget gates in LSTMs, but operating on second-order IIR dynamics.</p>
+
+    <h3>Eligibility Traces with Time-Varying Coefficients</h3>
+
+    <p>The key insight is that the eligibility trace recurrence structure is preserved. It simply uses the current (time-varying) coefficients rather than fixed scalars: \[e_y^\theta[t+1] = D^\theta[t+1] - a_0[t+1] \cdot e_y^\theta[t] - a_1[t+1] \cdot e_y^\theta[t-1]\]</p>
+
+    <p>What changes is the <em>driving term</em> \(D^\theta\), which now depends on which parameter \(\theta\) we're tracking.</p>
+
+    <p>For the main weights \(W\) and bias \(b\), the driving terms pick up the time-varying MA coefficients: \[D^W[t+1] = x[t] + b_0[t+1] \cdot x[t-1] + b_1[t+1] \cdot x[t-2]\] \[D^b[t+1] = 1 + b_0[t+1] + b_1[t+1]\]</p>
+
+    <p>For the adaptive coefficient networks, we need to account for how changes in the coefficient weights affect the output through the gating. Take \(w_{a_0}\) for example. The chain rule gives us: \[\frac{\partial y[t+1]}{\partial w_{a_0}} = \frac{\partial y[t+1]}{\partial a_0[t+1]} \cdot \frac{\partial a_0[t+1]}{\partial w_{a_0}} = -y[t] \cdot \sigma'(s_{a_0}) \cdot x[t]\] where \(\sigma'(s) = 1 - \tanh^2(s)\) is the tanh derivative. The driving term becomes: \[D^{w_{a_0}}[t+1] = -y[t] \cdot (1 - a_0[t+1]^2) \cdot x[t]\]</p>
+
+    <p>Similarly for the other coefficient networks: \[D^{w_{a_1}}[t+1] = -y[t-1] \cdot (1 - a_1[t+1]^2) \cdot x[t]\] \[D^{w_{b_0}}[t+1] = z[t] \cdot (1 - b_0[t+1]^2) \cdot x[t]\] \[D^{w_{b_1}}[t+1] = z[t-1] \cdot (1 - b_1[t+1]^2) \cdot x[t]\]</p>
+
+    <p>The bias terms \(c_{a_0}, c_{a_1}, c_{b_0}, c_{b_1}\) follow the same pattern, just without the outer product with \(x[t]\).</p>
+
+    <h3>Experiments</h3>
+
+    So I tried a few different things, preliminary experiments are on row-sequential MNIST and MinAtar Breakout with pure reward signal, no RL necessary.
+
+    <footer>
+        <p>© 2026 Thomas Pluck</p>
+    </footer>
+    </div>
+</body>
+</html>
