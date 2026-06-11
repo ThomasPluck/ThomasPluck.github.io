@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Blog of Thomas Pluck</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <div class="blog-container">
+    <header>
+        <h1>SnAP-1 DiffusionBlocks on a Deep LRU Stack</h1>
+        <nav class="menu-bar">
+            <a href="./index.html">Blog</a>
+            <a href="./about.html">About</a>
+        </nav>
+    </header>
+
+    <p>Suppose you have a deep recurrent network and you are forbidden from backpropagating <em>anywhere</em> - not backward through time, not backward through depth. Each layer may only touch quantities it can compute locally, online, as the sequence streams past. Can such a thing still get better with depth, or does stacking layers without a global error signal just buy you a very expensive single layer?</p>
+
+    <p>This is the make-or-break question for a research thread I've been pulling on for a while: the synthesis of <a href="https://arxiv.org/abs/2305.15947">Zucchet et al.'s exact online gradients for Linear Recurrent Units</a> (eligibility traces kill backprop-through-time) with <a href="https://arxiv.org/abs/2506.14202">DiffusionBlocks-style per-block local objectives</a> (block-wise losses kill backprop-through-depth). The two methods attack orthogonal axes - one temporal, one architectural - and the observation that started all this is that they compose: if every layer is its own block with its own loss, every layer is a "last layer" in Zucchet's sense, and the forward-mode trace rule computes its local gradient <em>exactly</em>, in constant memory, with no stored trajectory.</p>
+
+    <p>Exact with respect to <em>what</em> is the entire question, though. The traces give you the true gradient of each layer's <em>local</em> objective - they emphatically do not give you the end-to-end task gradient, because the local objective has no idea what the layers above need. CPU-scale diagnostics had already confirmed both halves of this: cosine alignment of the trace gradient against autodiff on the local loss sits at 1.0000 to machine precision, while alignment against full-stack BPTT decays with depth (~0.75 by five layers). So the gradients are genuinely different objects. The only way to find out whether the difference <em>matters</em> is to train the same model both ways and look at held-out loss. Hence: one model, two trainers.</p>
+
+    <h3>The Setup</h3>
+
+    <p>The model is a residual stack of \(L\) complex diagonal LRU layers (eigenvalues ring-initialised near \(|\lambda|=1\)), byte-level language modelling on enwik8, with a cross-entropy head on top. Identical architecture, identical data order, two training regimes:</p>
+
+    <ul>
+        <li><strong>BPTT</strong>: ordinary end-to-end backprop through the whole stack and through time. The thing every accelerator on earth is built to do, and the curve we have to track.</li>
+        <li><strong>Local</strong>: stop-gradients at every layer boundary. The final layer is trained as a decoder - cross-entropy on the next byte, gradient computed by eligibility traces. Every hidden layer is trained <em>only</em> by its own local denoising objective: predict (a noised target derived from) the next token's embedding from its own state. Critically the target is \(x_{t+1}\), never \(x_t\) - aim at the current token and the residual stream leaks it straight to the loss, your bpb looks miraculous, and you've trained an identity function. Ask me how I know.</li>
+    </ul>
+
+    <p>No backward pass crosses a layer boundary, and no backward pass crosses a timestep. Each layer's update at time \(t\) is assembled from its instantaneous local error and its forward-accumulated trace \(e^\theta_t = \partial s_t / \partial \theta\), which for diagonal recurrence costs the same order of memory as the weights themselves - the same structural luck I keep exploiting <a href="./adaptive_rtrl.html">in</a> <a href="./grid_neurons.html">everything</a>. Both trainers got their own learning-rate probe (it'd be unsporting to tune for one and bill the other), both picked \(3\times10^{-3}\), 3000 steps each, depth swept over \(\{1,2,4,6\}\).</p>
+
+    <h3>The Algorithm, Exactly</h3>
+
+    <p>Since the whole claim is exactness, here is the rule with nothing elided. Layer \(\ell\) is an LRU: complex diagonal recurrence, linear readout, residual connection. With \(u^\ell_t\) denoting the layer's input stream (the residual stream from below, <em>stop-gradded</em>),
+    \[s^\ell_t = \lambda^\ell \odot s^\ell_{t-1} + B^\ell u^\ell_t, \qquad y^\ell_t = \mathrm{Re}\!\left(C^\ell s^\ell_t\right) + D^\ell u^\ell_t, \qquad u^{\ell+1}_t = u^\ell_t + y^\ell_t\]
+    with \(\lambda^\ell \in \mathbb{C}^N\) ring-initialised, \(|\lambda_i|\) parameterised through \(\nu_i = \exp(-e^{\log\nu_i})\) and phase \(\theta_i\) as in Zucchet et al. so stability is free.</p>
+
+    <p><strong>Local objectives.</strong> Each hidden layer owns a stateless head \(g^\ell\) and a per-layer loss attached to its own output at every step:
+    \[\mathcal{L}^\ell_t = \left\| g^\ell\!\big(y^\ell_t\big) - \tilde{x}_{t+1} \right\|^2\]
+    where \(\tilde{x}_{t+1}\) is the (noised) embedding of the <em>next</em> byte - the denoising target. The final layer instead owns the decoder head and the task loss, \(\mathcal{L}^L_t = \mathrm{CE}\big(W_{\text{out}}\, y^L_t,\ x_{t+1}\big)\). Because of the stop-grads, \(\partial \mathcal{L}^\ell_t / \partial \theta^{m} = 0\) for every \(m \neq \ell\) by construction: layer \(\ell\)'s parameters \(\theta^\ell = \{\lambda^\ell, B^\ell, C^\ell, D^\ell, g^\ell\}\) only ever see \(\mathcal{L}^\ell\). This is the B = L configuration: one layer per block, so each layer is the "last layer" of its own one-layer network.</p>
+
+    <p><strong>Traces.</strong> That last sentence is what buys exactness. For a last layer, the only recurrent path from parameters to loss is through the layer's <em>own</em> state, and because the recurrence is diagonal, each hidden unit's sensitivity recursion closes over itself. Differentiate the state update and you get, per unit \(i\):
+    \[e^{\lambda}_{i,t} = \lambda_i\, e^{\lambda}_{i,t-1} + s_{i,t-1} \qquad\qquad e^{B}_{i,t} = \lambda_i\, e^{B}_{i,t-1} + u_t\]
+    i.e. one complex scalar per unit for \(\lambda\) (chain-ruled through \((\log\nu_i, \theta_i)\) at update time) and one complex row per unit for \(B\) - the trace for \(B_{ij}\) factors as \(e^B_{i,t}[j]\), the same outer-product structure as the weights themselves, so memory is \(O(\#\text{params})\), independent of \(T\). No traces are needed for \(C^\ell, D^\ell, g^\ell\): they sit downstream of the state, so their gradients are instantaneous.</p>
+
+    <p><strong>Update.</strong> At each step, compute the local error at the state, \(\delta^\ell_t = \partial \mathcal{L}^\ell_t / \partial s^\ell_t\) (one matrix-vector through the head and \(C^\ell\) - spatially local, no temporal structure), and contract with the traces:
+    \[\frac{\partial \mathcal{L}^\ell_t}{\partial \lambda_i} = \delta^\ell_{i,t}\, e^{\lambda}_{i,t}, \qquad \frac{\partial \mathcal{L}^\ell_t}{\partial B_{ij}} = \delta^\ell_{i,t}\, e^{B}_{i,t}[j]\]
+    taking real parts where parameters are real. These are not approximations: for each layer, this <em>is</em> \(\partial \mathcal{L}^\ell_t / \partial \theta^\ell\), identical to what reverse-mode autodiff on \(\mathcal{L}^\ell\) would return, verified to machine precision by finite differences in CI. Everything runs in a single forward sweep - state, traces, errors, updates - so per-step cost and memory are constant in sequence length.</p>
+
+    <p>The composition is then just bookkeeping: Zucchet's identity makes each trace gradient exact <em>given</em> that no error arrives from above; the per-layer objectives plus stop-grads <em>guarantee</em> no error arrives from above. Each method supplies exactly the precondition the other needs. What you give up - and the rest of this post is about measuring it - is that the sum of \(L\) exact local gradients is not the end-to-end gradient of \(\mathcal{L}^L\).</p>
+
+    <h3>Results</h3>
+
+    <center><img src="img/bpb_vs_depth.png" width="70%"></center>
+
+    <table style="margin: 0 auto; border-collapse: collapse;">
+        <thead><tr><th style="padding: 0 12px;">depth</th><th style="padding: 0 12px;">BPTT (bpb)</th><th style="padding: 0 12px;">local (bpb)</th><th style="padding: 0 12px;">gap</th></tr></thead>
+        <tbody>
+            <tr><td style="text-align:center;">1</td><td style="text-align:center;">2.687</td><td style="text-align:center;">2.684</td><td style="text-align:center;">−0.004</td></tr>
+            <tr><td style="text-align:center;">2</td><td style="text-align:center;">2.206</td><td style="text-align:center;">2.244</td><td style="text-align:center;">+0.038</td></tr>
+            <tr><td style="text-align:center;">4</td><td style="text-align:center;">2.110</td><td style="text-align:center;">2.173</td><td style="text-align:center;">+0.063</td></tr>
+            <tr><td style="text-align:center;">6</td><td style="text-align:center;">2.097</td><td style="text-align:center;">2.183</td><td style="text-align:center;">+0.085</td></tr>
+        </tbody>
+    </table>
+
+    <p>Three things to read off this, in decreasing order of how happy they make me.</p>
+
+    <p><strong>First, the sanity check passes at depth 1.</strong> With a single layer there is no depth axis to be local <em>over</em> - both trainers are optimising the same objective, one by reverse mode, one by forward-mode traces - and they land within four thousandths of a bit of each other. The trace machinery is computing the gradient it claims to compute.</p>
+
+    <p><strong>Second, and this is the headline: depth gain under local training is real.</strong> The local curve drops from 2.68 to 2.17 bits/byte going from one layer to four. Layers two through four contribute roughly half a bit of compression <em>despite never receiving a single gradient from the cross-entropy loss they're ultimately serving</em>. The local denoising objective is, on its own, enough of an organising principle to make a hidden LRU layer produce representations that the layers above can compound. It was entirely on the cards that the local curve would go flat at depth 2 - stacking would be decorative, the whole programme dead on arrival. It tracks instead.</p>
+
+    <p><strong>Third, the honest part: tracking is not matching.</strong> The gap opens at about 0.04 bpb per doubling and the local curve has gone flat by depth 6 (2.173 → 2.183, which I read as noise about a plateau) while BPTT is still creeping down. This is exactly the signature you'd predict from the theory: the local gradient is exact for an objective that is blind to what downstream layers actually need, so what's lost is cross-layer coordination - layer 3 cannot learn to emit the feature that layer 5 is starving for unless the local objective happens to demand it anyway. DiffusionBlocks themselves report the same flavour of gap against end-to-end training in image generation, so nobody should be surprised that the two gradient fields optimise to different places. The surprise ceiling was always "how much does it cost", and at this scale the answer is: under a tenth of a bit, for the complete elimination of backprop in both directions.</p>
+
+    <h3>Caveats, Of Which There Are Several</h3>
+
+    <p>Single seed, 3000 steps, modest widths - this is a shape-of-the-curve experiment, not a benchmark entry, and both runs are visibly undertrained (train CE was still falling at cutoff for every configuration). The depth-6 plateau in particular needs seeds before I trust it: it could be a genuine ceiling of the local objective, or it could be that deeper local stacks just want more steps or a per-depth learning rate, since the LR probe picked the same winner everywhere, which always makes me slightly suspicious that the grid was too coarse.</p>
+
+    <p>The comparison is also maximally unflattering to the local trainer, deliberately. BPTT here gets unbounded memory - full trajectory storage, exact end-to-end credit assignment. The regime the trace method is actually <em>for</em> is the one where that's off the table: streaming data, long sequences, memory-matched budgets where BPTT must truncate. A truncated-BPTT baseline at matched memory, and a long-lag benchmark where truncation actively destroys the signal that traces preserve by construction, is the next comparison - and the one where the local trainer is supposed to win rather than merely survive.</p>
+
+    <footer>
+        <p>© 2026 Thomas Pluck</p>
+    </footer>
+    </div>
+</body>
+</html>
